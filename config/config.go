@@ -7,6 +7,9 @@ import (
 )
 
 type Config struct {
+	App struct {
+		Port string
+	}
 	Database struct {
 		Dsn          string
 		MaxIdleConns int
