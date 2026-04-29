@@ -1,6 +1,8 @@
 package global
 
 import (
+	"Short_link/utils"
+
 	"github.com/go-redis/redis"
 	"gorm.io/gorm"
 )
@@ -8,4 +10,5 @@ import (
 var (
 	Db      *gorm.DB //database 数据库
 	RedisDB *redis.Client
+	GID     *utils.IDGenerator
 )

@@ -3,6 +3,7 @@ package config
 import (
 	"Short_link/global"
 	"Short_link/models"
+	"Short_link/utils"
 	"log"
 	"time"
 
@@ -28,10 +29,13 @@ func initDB() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
+	global.GID = utils.NewIDGenerator(db, "short_link")
+
 	global.Db = db
 
 	err = global.Db.AutoMigrate(
 		&models.ShortLink{},
+		&utils.SegmentIdInfo{},
 	)
 	if err != nil {
 		log.Fatalf("数据库表结构同步失败: %v", err)

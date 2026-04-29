@@ -3,6 +3,7 @@ package controllers
 import (
 	"Short_link/global"
 	"Short_link/models"
+	"Short_link/utils"
 	"errors"
 	"log"
 	"net/http"
@@ -17,6 +18,11 @@ func Redirect(ctx *gin.Context) {
 	url, err := global.RedisDB.Get("key:" + key).Result()
 	if err != nil {
 		log.Println("Redirect,Redis", err)
+	}
+
+	if err == nil && url != "" {
+		ctx.Redirect(http.StatusFound, url)
+		return
 	}
 
 	shortLink := models.ShortLink{}
@@ -41,7 +47,6 @@ func Redirect(ctx *gin.Context) {
 
 func CreateRedirect(ctx *gin.Context) {
 	var input struct {
-		Key string `json:"key" form:"key" binding:"required"`
 		Url string `json:"url" form:"url" binding:"required"`
 	}
 
@@ -50,20 +55,30 @@ func CreateRedirect(ctx *gin.Context) {
 		return
 	}
 
-	err := global.Db.Create(&models.ShortLink{
-		ShortKey: input.Key,
+	key, err := global.GID.NextID()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	keystr := utils.EncodeBase62(uint64(key))
+
+	err = global.Db.Create(&models.ShortLink{
+		ShortKey: keystr,
 		LongUrl:  input.Url,
 	}).Error
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// 处理其他未知的数据库错误（不要把 err.Error() 抛给前端）
+		// 可以在后端打 log 记录真实的 err
+		log.Println("CreateRedirect,mysql", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "系统内部错误"})
 		return
 	}
 
-	err = global.RedisDB.Set("key:"+input.Key, input.Url, 24*time.Hour).Err()
+	err = global.RedisDB.Set("key:"+keystr, input.Url, 24*time.Hour).Err()
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		log.Println("CreateRedirect,Redis", err)
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "短链接创建成功"})
+	ctx.JSON(http.StatusOK, gin.H{"message": "短链接创建成功:" + keystr})
 }
