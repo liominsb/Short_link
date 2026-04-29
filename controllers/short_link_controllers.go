@@ -28,7 +28,7 @@ func Redirect(ctx *gin.Context) {
 	shortLink := models.ShortLink{}
 
 	if errors.Is(err, redis.Nil) {
-		err := global.Db.Model(&models.ShortLink{}).Where("short_key=?", key).First(&shortLink).Error
+		err := global.Db.Model(&models.ShortLink{}).Where("id=?", utils.DecodeBase62(key)).First(&shortLink).Error
 		if err != nil {
 			global.RedisDB.Set("key:"+key, shortLink.LongUrl, 60*time.Second)
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "短链接不存在"})
@@ -61,11 +61,11 @@ func CreateRedirect(ctx *gin.Context) {
 		return
 	}
 
-	keystr := utils.EncodeBase62(uint64(key))
+	keystr := utils.EncodeBase62(key)
 
 	err = global.Db.Create(&models.ShortLink{
-		ShortKey: keystr,
-		LongUrl:  input.Url,
+		ID:      key,
+		LongUrl: input.Url,
 	}).Error
 	if err != nil {
 		// 处理其他未知的数据库错误（不要把 err.Error() 抛给前端）

@@ -1,9 +1,6 @@
 package models
 
-import "gorm.io/gorm"
-
 type ShortLink struct {
-	gorm.Model
-	ShortKey string `json:"short_code" gorm:"unique;not null"`
-	LongUrl  string `json:"short_url" gorm:"not null"`
+	ID      uint64 `json:"id" gorm:"unique;not null;primaryKey"`
+	LongUrl string `json:"long_url" gorm:"not null"`
 }

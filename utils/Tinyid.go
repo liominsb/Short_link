@@ -1,27 +1,14 @@
 package utils
 
 import (
+	"Short_link/models"
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
-
-// SegmentIdInfo 号段发号器配置表
-type SegmentIdInfo struct {
-	BizTag    string    `gorm:"column:biz_tag;primaryKey;type:varchar(32);not null;comment:业务标识"`
-	MaxID     int64     `gorm:"column:max_id;type:bigint;not null;default:0;comment:当前已分配的最大ID"`
-	Step      int       `gorm:"column:step;type:int;not null;default:1000;comment:每次分配的号段步长"`
-	UpdatedAt time.Time `gorm:"column:updated_at;type:timestamp;autoUpdateTime;comment:更新时间"`
-}
-
-// TableName 指定表名
-func (SegmentIdInfo) TableName() string {
-	return "segment_id_info"
-}
 
 // IDGenerator 号段发号器
 type IDGenerator struct {
@@ -29,8 +16,8 @@ type IDGenerator struct {
 	bizTag string
 
 	mutex   sync.Mutex // 保护内存号段并发安全
-	current int64      // 本地内存当前发到的 ID
-	max     int64      // 本地内存号段的上限 ID
+	current uint64     // 本地内存当前发到的 ID
+	max     uint64     // 本地内存号段的上限 ID
 }
 
 // NewIDGenerator 初始化发号器
@@ -42,7 +29,7 @@ func NewIDGenerator(db *gorm.DB, bizTag string) *IDGenerator {
 }
 
 // NextID 获取下一个全局唯一 ID
-func (g *IDGenerator) NextID() (int64, error) {
+func (g *IDGenerator) NextID() (uint64, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
@@ -60,48 +47,57 @@ func (g *IDGenerator) NextID() (int64, error) {
 // loadNextSegment 利用 GORM 事务和悲观锁申请新号段
 func (g *IDGenerator) loadNextSegment() error {
 	return g.db.Transaction(func(tx *gorm.DB) error {
-		var segment SegmentIdInfo
+		var segment models.SegmentIdInfo
 
 		// 1. 查询当前业务号段并加上排他锁
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("biz_tag = ?", g.bizTag).
 			First(&segment).Error
 
-		// 2. 核心修正：处理记录不存在的情况
+		// 2. 分支 A：记录不存在，执行初始化
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				// 如果记录不存在，则初始化一条记录
-				segment = SegmentIdInfo{
+				startID := uint64(1000)
+				step := uint64(10)
+				newMaxID := startID + step
+
+				// 初始化一条记录（直接存入占据后的上限）
+				segment = models.SegmentIdInfo{
 					BizTag: g.bizTag,
-					MaxID:  1000, // 初始 ID 从 0 开始（发出的第一个号将是 1）
-					Step:   10,   // 默认步长
+					MaxID:  int64(newMaxID),
+					Step:   int(step),
 				}
-				// 写入数据库
 				if createErr := tx.Create(&segment).Error; createErr != nil {
 					return fmt.Errorf("自动初始化号段记录失败: %w", createErr)
 				}
-				// 初始化成功后，不需要走后续的 Update 逻辑了，直接在内存分配即可
-			} else {
-				// 如果是其他数据库错误（如断网），直接返回
-				return fmt.Errorf("查询并锁定号段记录失败: %w", err)
-			}
-		} else {
-			// 3. 如果记录存在，执行正常的步长推进逻辑
-			startID := g.current
-			newMaxID := startID + int64(segment.Step)
 
-			err = tx.Table("segment_id_info").
-				Where("biz_tag = ?", g.bizTag).
-				UpdateColumn("max_id", newMaxID).Error
-			if err != nil {
-				return fmt.Errorf("更新数据库 max_id 失败: %w", err)
+				// 直接为内存赋值并返回
+				g.current = startID
+				g.max = newMaxID
+				return nil
 			}
-			segment.MaxID = startID // 为了下一步统一赋值给内存
+			return fmt.Errorf("查询并锁定号段记录失败: %w", err)
 		}
 
-		// 4. 将新号段（或刚初始化的号段）加载到当前实例的内存中
-		g.current = segment.MaxID
-		g.max = segment.MaxID + int64(segment.Step)
+		// 3. 分支 B：记录存在，执行步长推进
+		// 【绝对真理】：起点必须用数据库里查出的 segment.MaxID
+		startID := uint64(segment.MaxID)
+		newMaxID := startID + uint64(segment.Step)
+
+		res := tx.Table("segment_id_info").
+			Where("biz_tag = ?", g.bizTag).
+			UpdateColumn("max_id", newMaxID)
+
+		if res.Error != nil {
+			return fmt.Errorf("更新数据库 max_id 失败: %w", res.Error)
+		}
+		if res.RowsAffected == 0 {
+			return fmt.Errorf("严重异常: 更新了 0 行数据，防止发号倒流")
+		}
+
+		// 4. 将新号段直接加载到内存中，没有任何多余的中间变量
+		g.current = startID
+		g.max = newMaxID
 
 		return nil
 	})
