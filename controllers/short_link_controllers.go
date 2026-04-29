@@ -108,7 +108,7 @@ func CreateRedirect(ctx *gin.Context) {
 		return
 	}
 
-	err = global.RedisDB.Set(utils.EncodeBase62(key), input.Url, 1*time.Hour).Err()
+	err = global.RedisDB.Set("key:"+utils.EncodeBase62(key), input.Url, 1*time.Hour).Err()
 	if err != nil {
 		// Redis 写入失败时，为了保证数据一致性，通常选择直接报错，终止当前请求
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "缓存写入失败，请重试"})
