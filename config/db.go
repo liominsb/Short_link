@@ -35,7 +35,7 @@ func initDB() {
 
 	err = global.Db.AutoMigrate(
 		&models.ShortLink{},
-		&utils.SegmentIdInfo{},
+		&models.SegmentIdInfo{},
 	)
 	if err != nil {
 		log.Fatalf("数据库表结构同步失败: %v", err)

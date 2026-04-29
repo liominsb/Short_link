@@ -58,7 +58,7 @@ func (g *IDGenerator) loadNextSegment() error {
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				startID := uint64(1000)
-				step := uint64(10)
+				step := uint64(1000)
 				newMaxID := startID + step
 
 				// 初始化一条记录（直接存入占据后的上限）

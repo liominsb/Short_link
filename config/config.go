@@ -1,6 +1,8 @@
 package config
 
 import (
+	"Short_link/MQ"
+	"Short_link/global"
 	"log"
 
 	"github.com/spf13/viper"
@@ -39,4 +41,6 @@ func InitConfig() {
 
 	initDB()
 	initRedis()
+	MQ.InitRabbitMQ()
+	MQ.StartInsertWorker(global.Db)
 }
