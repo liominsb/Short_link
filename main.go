@@ -14,8 +14,6 @@ func main() {
 
 	//弃用 gin.Default()，改用 gin.New() 创建一个没有任何中间件的纯净引擎
 	r := gin.New()
-
-	// 手动挂载 Recovery 中间件，以捕获任何未处理的 panic 并返回 500 错误
 	r.Use(gin.Recovery())
 	r.GET("/s/:key", controllers.Redirect)
 	r.POST("/s", controllers.CreateRedirect)
