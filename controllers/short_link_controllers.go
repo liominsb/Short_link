@@ -48,6 +48,7 @@ func Redirect(ctx *gin.Context) {
 	ctx.Redirect(http.StatusFound, url)
 }
 
+//无MQ版本
 //func CreateRedirect(ctx *gin.Context) {
 //	var input struct {
 //		Url string `json:"url" form:"url" binding:"required"`
@@ -102,15 +103,22 @@ func CreateRedirect(ctx *gin.Context) {
 		return
 	}
 
+	// 【探针 1：测 MySQL 发号器步长性能】
+	t1 := time.Now()
 	key, err := global.GID.NextID()
+	log.Printf("探针1 - 生成ID耗时: %v\n", time.Since(t1))
+
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	// 【探针 2：测 Redis 网络或写入性能】
+	t2 := time.Now()
 	err = global.RedisDB.Set("key:"+utils.EncodeBase62(key), input.Url, 1*time.Hour).Err()
+	log.Printf("探针2 - Redis写入耗时: %v\n", time.Since(t2))
+
 	if err != nil {
-		// Redis 写入失败时，为了保证数据一致性，通常选择直接报错，终止当前请求
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "缓存写入失败，请重试"})
 		return
 	}
@@ -126,9 +134,14 @@ func CreateRedirect(ctx *gin.Context) {
 	ctx1, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err = global.Channel.PublishWithContext(ctx1,
-		"",                // exchange (默认交换机)
-		global.Queue.Name, // routing key (直接发给我们的队列)
+	ch := <-global.ChannelPool
+	defer func() { global.ChannelPool <- ch }()
+
+	// 【探针 3：测 RabbitMQ 磁盘刷盘或网络投递性能】
+	t3 := time.Now()
+	err = ch.PublishWithContext(ctx1,
+		"",                // exchange
+		global.Queue.Name, // routing key
 		false,
 		false,
 		amqp.Publishing{
@@ -136,12 +149,14 @@ func CreateRedirect(ctx *gin.Context) {
 			ContentType:  "application/json",
 			Body:         body,
 		})
+	log.Printf("探针3 - MQ投递耗时: %v\n", time.Since(t3))
 
 	if err != nil {
+		log.Printf("MQ投递失败, ID: %d, Error: %v\n", key, err)
 		ctx.JSON(500, gin.H{"error": "系统繁忙，消息投递失败"})
 		return
 	}
 
-	// 3. 立刻返回成功，绝不等待数据库
+	// 3. 立刻返回成功
 	ctx.JSON(200, gin.H{"short_url": utils.EncodeBase62(key)})
 }

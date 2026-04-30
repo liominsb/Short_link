@@ -13,7 +13,11 @@ import (
 
 // StartInsertWorker 启动异步写库协程
 func StartInsertWorker(db *gorm.DB) {
-	msgs, err := global.Channel.Consume(
+
+	ch := <-global.ChannelPool
+	defer func() { global.ChannelPool <- ch }()
+
+	msgs, err := ch.Consume(
 		global.Queue.Name,
 		"worker_1", // 消费者名字
 		false,      // auto-ack 设为 false，必须手动确认，防止程序崩溃丢数据
@@ -45,7 +49,7 @@ func StartInsertWorker(db *gorm.DB) {
 				return // 生产环境中这里需要做错误重试
 			}
 			// 告诉 MQ：这批数据我处理完了，可以从队列里删了
-			global.Channel.Ack(deliveryTags[len(deliveryTags)-1], true)
+			ch.Ack(deliveryTags[len(deliveryTags)-1], true)
 
 			// 清空切片，迎接下一批数据
 			batch = batch[:0]
