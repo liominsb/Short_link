@@ -103,53 +103,40 @@ func CreateRedirect(ctx *gin.Context) {
 		return
 	}
 
-	// 【探针 1：测 MySQL 发号器步长性能】
-	t1 := time.Now()
 	key, err := global.GID.NextID()
-	log.Printf("探针1 - 生成ID耗时: %v\n", time.Since(t1))
-
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 【探针 2：测 Redis 网络或写入性能】
-	t2 := time.Now()
 	err = global.RedisDB.Set("key:"+utils.EncodeBase62(key), input.Url, 1*time.Hour).Err()
-	log.Printf("探针2 - Redis写入耗时: %v\n", time.Since(t2))
-
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "缓存写入失败，请重试"})
 		return
 	}
 
-	// 1. 组装要发给 MQ 的数据
 	msg := MsgPayload{
 		ID:      key,
 		LongURL: input.Url,
 	}
 	body, _ := json.Marshal(msg)
 
-	// 2. 将数据推送到 RabbitMQ
 	ctx1, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	ch := <-global.ChannelPool
 	defer func() { global.ChannelPool <- ch }()
 
-	// 【探针 3：测 RabbitMQ 磁盘刷盘或网络投递性能】
-	t3 := time.Now()
 	err = ch.PublishWithContext(ctx1,
-		"",                // exchange
-		global.Queue.Name, // routing key
+		"",
+		global.Queue.Name,
 		false,
 		false,
 		amqp.Publishing{
-			DeliveryMode: amqp.Persistent, // 消息持久化
+			DeliveryMode: amqp.Persistent,
 			ContentType:  "application/json",
 			Body:         body,
 		})
-	log.Printf("探针3 - MQ投递耗时: %v\n", time.Since(t3))
 
 	if err != nil {
 		log.Printf("MQ投递失败, ID: %d, Error: %v\n", key, err)
@@ -157,6 +144,5 @@ func CreateRedirect(ctx *gin.Context) {
 		return
 	}
 
-	// 3. 立刻返回成功
 	ctx.JSON(200, gin.H{"short_url": utils.EncodeBase62(key)})
 }
