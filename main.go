@@ -3,6 +3,7 @@ package main
 import (
 	"Short_link/config"
 	"Short_link/controllers"
+	"Short_link/middlewares"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -14,7 +15,8 @@ func main() {
 
 	//弃用 gin.Default()，改用 gin.New() 创建一个没有任何中间件的纯净引擎
 	r := gin.New()
-	r.Use(gin.Recovery())
+	rl := middlewares.NewRateLimiter(config.Appconf.TokenBucket.Rate, config.Appconf.TokenBucket.Capacity)
+	r.Use(gin.Recovery(), middlewares.RateLimitMiddleware(rl))
 	r.GET("/s/:key", controllers.Redirect)
 	r.POST("/s", controllers.CreateRedirect)
 	err := r.Run(config.Appconf.App.Port)

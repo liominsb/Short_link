@@ -20,6 +20,10 @@ type Config struct {
 		Password     string
 		SubSwitch    bool //是否开启redis分布式锁，默认为false
 	}
+	TokenBucket struct {
+		Rate     float64
+		Capacity float64
+	}
 }
 
 var Appconf *Config
