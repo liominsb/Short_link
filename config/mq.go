@@ -1,4 +1,4 @@
-package MQ
+package config
 
 import (
 	"Short_link/global"
@@ -10,12 +10,12 @@ import (
 func InitRabbitMQ() {
 	var err error
 	// 1. 建立连接
-	global.Conn, err = amqp.Dial("amqp://guest:guest@localhost:5672/")
+	global.Conn, err = amqp.Dial(Appconf.Mq.Url)
 	if err != nil {
 		log.Fatalf("连接 RabbitMQ 失败: %v", err)
 	}
 
-	poolSize := 400
+	poolSize := Appconf.Mq.PoolSize
 	global.ChannelPool = make(chan *amqp.Channel, poolSize)
 	// 2. 打开通道
 	for i := 0; i < poolSize; i++ {

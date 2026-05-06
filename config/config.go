@@ -24,6 +24,10 @@ type Config struct {
 		Rate     float64
 		Capacity float64
 	}
+	Mq struct {
+		Url      string
+		PoolSize int
+	}
 }
 
 var Appconf *Config
@@ -45,6 +49,6 @@ func InitConfig() {
 
 	initDB()
 	initRedis()
-	MQ.InitRabbitMQ()
+	InitRabbitMQ()
 	MQ.StartInsertWorker(global.Db)
 }
