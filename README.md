@@ -49,28 +49,26 @@ go mod download
 ### 3. 配置环境
 
 在项目根目录创建配置文件 `config.yaml`（或根据项目实际配置位置调整）：
-
+参考:
 ```yaml
 app:
-  port: ":8080"  # 服务端口
+  name: App
+  port: :3000
 
-tokenbucket:
-  rate: 100      # 令牌生成速率（每秒）
-  capacity: 200  # 令牌桶容量
+database:
+  dsn : "root:123456@tcp(127.0.0.1:3306)/a?charset=utf8mb4&parseTime=True&loc=Local"
+  MaxIdleConns: 10
+  MaxOpenConns: 100
+##redis:
+  Addr : "localhost:6379"
+  Password : ""
+  SubSwitch : "false"
 
-# MySQL 配置
-# database:
-#   dsn: "user:password@tcp(localhost:3306)/short_link?charset=utf8mb4&parseTime=True"
+JWT:
+  Key : "JWT_SECRET"
 
-# Redis 配置
-# redis:
-#   addr: "localhost:6379"
-#   password: ""
-#   db: 0
-
-# RabbitMQ 配置
-# rabbitmq:
-#   url: "amqp://guest:guest@localhost:5672/"
+RabbitMQ:
+  Url: "amqp://guest:guest@localhost:5672/"
 ```
 
 ### 4. 运行服务
