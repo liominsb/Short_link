@@ -53,7 +53,7 @@ go mod download
 ```yaml
 app:
   name: App
-  port: :3000
+  port: :8080
 
 database:
   dsn : "root:123456@tcp(127.0.0.1:3306)/a?charset=utf8mb4&parseTime=True&loc=Local"
